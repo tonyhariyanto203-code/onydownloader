@@ -111,11 +111,8 @@ HTML_TEMPLATE = """
             result.innerHTML = '';
 
             try {
-                const response = await fetch('/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url })
-                });
+                // Karena pakai folder api, fetch langsung ke endpoint api/index
+                const response = await responseApi(url);
                 const data = await response.json();
 
                 if (data.error) {
@@ -131,13 +128,25 @@ HTML_TEMPLATE = """
                 status.innerHTML = '<span style="color: #f87171;">Terjadi kesalahan sistem!</span>';
             }
         }
+
+        async function responseApi(url) {
+            return await fetch('/api/index', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url })
+            });
+        }
     </script>
 </body>
 </html>
 """
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET'])
 def home():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/api/index', methods=['GET', 'POST'])
+def api_index():
     if request.method == 'POST':
         data = request.get_json() or {}
         url = data.get('url')
