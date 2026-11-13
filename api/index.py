@@ -1,5 +1,7 @@
 from flask import Flask, render_template_string, request, jsonify
 import yt_dlp
+import os
+import tempfile
 
 app = Flask(__name__)
 
@@ -111,8 +113,11 @@ HTML_TEMPLATE = """
             result.innerHTML = '';
 
             try {
-                // Karena pakai folder api, fetch langsung ke endpoint api/index
-                const response = await responseApi(url);
+                const response = await fetch('/api/index', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
                 const data = await response.json();
 
                 if (data.error) {
@@ -127,14 +132,6 @@ HTML_TEMPLATE = """
             } catch (err) {
                 status.innerHTML = '<span style="color: #f87171;">Terjadi kesalahan sistem!</span>';
             }
-        }
-
-        async function responseApi(url) {
-            return await fetch('/api/index', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
-            });
         }
     </script>
 </body>
@@ -154,11 +151,34 @@ def api_index():
         if not url:
             return jsonify({'error': 'URL tidak boleh kosong'}), 400
 
-        ydl_opts = {'format': 'best'}
-        
+        cookie_content = os.environ.get('YOUTUBE_COOKIES')
+        cookie_file_path = None
+
+        ydl_opts = {
+            'format': 'best',
+            'noplaylist': True,
+            'quiet': True,
+            'no_warnings': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web']
+                }
+            }
+        }
+
+        # Jika cookie tersedia di Environment Variables, buat file temporary otomatis
+        if cookie_content:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+                f.write(cookie_content)
+                cookie_file_path = f.name
+            ydl_opts['cookiefile'] = cookie_file_path
+
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
+                if not info:
+                    return jsonify({'error': 'Gagal mengambil data video.'}), 500
+                    
                 video_title = info.get('title', 'Video YouTube')
                 download_url = info.get('url')
                 return jsonify({
@@ -167,6 +187,10 @@ def api_index():
                 })
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+        finally:
+            # Hapus file temporary setelah selesai dipakai untuk keamanan server
+            if cookie_file_path and os.path.exists(cookie_file_path):
+                os.remove(cookie_file_path)
 
     return render_template_string(HTML_TEMPLATE)
 
