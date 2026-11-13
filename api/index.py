@@ -111,7 +111,7 @@ HTML_TEMPLATE = """
             result.innerHTML = '';
 
             try {
-                const response = await fetch('/api/index', {
+                const response = await fetch('/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: url })
@@ -136,31 +136,30 @@ HTML_TEMPLATE = """
 </html>
 """
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['GET', 'POST'])
 def home():
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'error': 'URL tidak boleh kosong'}), 400
+
+        ydl_opts = {'format': 'best'}
+        
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                video_title = info.get('title', 'Video YouTube')
+                download_url = info.get('url')
+                return jsonify({
+                    'title': video_title,
+                    'download_url': download_url
+                })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     return render_template_string(HTML_TEMPLATE)
-
-@app.route('/api/index', methods=['POST'])
-def get_download_link():
-    data = request.get_json()
-    url = data.get('url')
-    
-    if not url:
-        return jsonify({'error': 'URL tidak boleh kosong'}), 400
-
-    ydl_opts = {'format': 'best'}
-    
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            video_title = info.get('title', 'Video YouTube')
-            download_url = info.get('url')
-            return jsonify({
-                'title': video_title,
-                'download_url': download_url
-            })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
