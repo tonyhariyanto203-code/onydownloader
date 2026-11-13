@@ -151,7 +151,7 @@ def api_index():
         if not url:
             return jsonify({'error': 'URL tidak boleh kosong'}), 400
 
-        cookie_content = os.environ.get('YOUTUBE_COOKIES')
+        cookie_content = os.environ.get('YOUTUBE_COOKIES', '')
         cookie_file_path = None
 
         ydl_opts = {
@@ -166,9 +166,11 @@ def api_index():
             }
         }
 
-        # Jika cookie tersedia di Environment Variables, buat file temporary otomatis
         if cookie_content:
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as f:
+                # Pastikan format Netscape memiliki header wajib di baris pertama
+                if not cookie_content.startswith('# Netscape'):
+                    f.write("# Netscape HTTP Cookie File\n")
                 f.write(cookie_content)
                 cookie_file_path = f.name
             ydl_opts['cookiefile'] = cookie_file_path
@@ -188,7 +190,6 @@ def api_index():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
         finally:
-            # Hapus file temporary setelah selesai dipakai untuk keamanan server
             if cookie_file_path and os.path.exists(cookie_file_path):
                 os.remove(cookie_file_path)
 
